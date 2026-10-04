@@ -32,37 +32,37 @@ The system is architected around **Clean Architecture** and **Domain-Driven Desi
 
 ```mermaid
 flowchart TD
-    subgraph Presentation["1. Presentation Tier"]
+    subgraph Presentation ["1. Presentation Tier"]
         UI["React 18 Dual-Pane Client<br/>(Vite + Tailwind CSS + Lucide)"]
         API["ASP.NET Core 9 Web API<br/>(Rate Limiter, Serilog, CORS, Swagger)"]
     end
 
-    subgraph Security["2. Enterprise Security & Routing"]
+    subgraph Security ["2. Enterprise Security & Routing"]
         Middleware["MultiTenantMiddleware<br/>(Extracts TenantId & Roles from Claims/Headers)"]
         CurrentUser["CurrentUserService<br/>(Scoped Ambient Request Context)"]
     end
 
-    subgraph Application["3. Application Tier (CQRS via MediatR)"]
+    subgraph Application ["3. Application Tier (CQRS via MediatR)"]
         UploadCmd["UploadDocumentCommand<br/>(Layout-aware Parsing & Chunking)"]
         AskCmd["AskQuestionCommand<br/>(RAG Pipeline Orchestrator)"]
     end
 
-    subgraph Domain["4. Domain Tier"]
+    subgraph Domain ["4. Domain Tier"]
         Entities["Entities: Tenant, User, Document,<br/>DocumentChunk, Conversation, ChatMessage, AuditLog"]
         ValueObjects["Value Objects: Citation, BoundingBox"]
     end
 
-    subgraph Infrastructure["5. Infrastructure & AI Core"]
+    subgraph Infrastructure ["5. Infrastructure & AI Core"]
         Parser["PdfPigDocumentParser<br/>(Layout, Blocks, Headers & Tables)"]
         Chunker["RecursiveMarkdownChunker<br/>(Header Preservation & SHA-256 Hash)"]
         Embedder["OpenAiEmbeddingGenerator<br/>(text-embedding-3-small / 1536-dim)"]
-        VecStore["PostgresVectorStore<br/>(pgvector Cosine <=> + BM25 ts_rank_cd)"]
+        VecStore["PostgresVectorStore<br/>(pgvector Cosine Distance + BM25 ts_rank_cd)"]
         Fusion["Reciprocal Rank Fusion (RRF)<br/>(k = 60 calibration)"]
         Reranker["CohereRerankService<br/>(Cross-Encoder Rerank v3.5)"]
         SK["SemanticKernelService<br/>(Structured JSON Grounding & Refusal)"]
     end
 
-    subgraph Storage["6. Persistence Tier"]
+    subgraph Storage ["6. Persistence Tier"]
         DB[("PostgreSQL 16 + pgvector<br/>(HNSW Vector Index & GIN tsvector)")]
     end
 
@@ -193,23 +193,23 @@ Retrieval leverages **Dense Vector Search** (semantic meaning) and **Sparse Full
 
 ```mermaid
 flowchart TD
-    Query["User Query: 'What is peak chamber temperature under 85% throttle?'"]
-    RLS["1. RLS Pre-Filter (Mandatory SQL Constraint)<br/>WHERE tenant_id = @tid AND acl_roles && @userRoles"]
+    Query["User Query: What is peak chamber temperature under 85% throttle?"]
+    RLS["1. RLS Pre-Filter (Mandatory SQL Constraint)<br/>WHERE tenant_id = @tid AND acl_roles OVERLAPS @userRoles"]
     
-    subgraph ParallelSearch["2. Parallel Retrieval (Top-25 Candidates Each)"]
-        Dense["Dense Vector Search<br/>pgvector Cosine Distance: embedding <=> @queryVector<br/>Captures semantic intent & paraphrases"]
-        Sparse["Sparse Full-Text Search<br/>Postgres tsvector @@ to_tsquery + ts_rank_cd<br/>Captures exact tokens: '85%', 'chamber', 'temperature'"]
+    subgraph ParallelSearch ["2. Parallel Retrieval (Top-25 Candidates Each)"]
+        Dense["Dense Vector Search<br/>pgvector Cosine Distance: embedding vs @queryVector<br/>Captures semantic intent & paraphrases"]
+        Sparse["Sparse Full-Text Search<br/>Postgres tsvector MATCH to_tsquery + ts_rank_cd<br/>Captures exact tokens: 85%, chamber, temperature"]
     end
 
-    subgraph Fusion["3. Reciprocal Rank Fusion (RRF)"]
+    subgraph Fusion ["3. Reciprocal Rank Fusion (RRF)"]
         RRF["RRF(d) = 1 / (60 + DenseRank) + 1 / (60 + SparseRank)<br/>Fuses disparate unbounded scores without calibration errors"]
     end
 
-    subgraph Reranker["4. Cross-Encoder Reranking"]
+    subgraph Reranker ["4. Cross-Encoder Reranking"]
         Cohere["Cohere Rerank v3.5 (Top-5 Context Selection)<br/>Evaluates full joint attention across (query, chunk) pairs<br/>Eliminates lost-in-the-middle context pollution"]
     end
 
-    subgraph Generation["5. Strict Grounded Generation"]
+    subgraph Generation ["5. Strict Grounded Generation"]
         SK["Microsoft Semantic Kernel + GPT-4o-mini<br/>Structured JSON Schema Enforcement & Deterministic Refusal"]
     end
 
@@ -218,8 +218,8 @@ flowchart TD
     RLS --> Sparse
     Dense --> RRF
     Sparse --> RRF
-    RRF -->|Top 25 Candidates| Cohere
-    Cohere -->|Top 5 Reranked Context Chunks| SK
+    RRF -->|"Top 25 Candidates"| Cohere
+    Cohere -->|"Top 5 Reranked Context Chunks"| SK
 ```
 
 ### The Mathematics of Reciprocal Rank Fusion (RRF)
